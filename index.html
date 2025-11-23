@@ -1,0 +1,255 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Pick One</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <style>
+        /*Basic reset and layout */
+        * {
+            box-sizing: border-box;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #050510;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #fff;
+            overflow: hidden;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        #overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            opacity: 0.9;
+        }
+        #subtitle {
+            opacity: 0.6;
+            margin-top: .4rem;
+        }
+        #status {
+            opacity: 0.9;
+            margin-top: 1rem;
+        }
+        #resetHint {
+            position: fixed;
+            bottom: 10px;
+            width: 100%;
+            text-align: center;
+            opacity: 0.45;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div id="overlay">
+        <div id="title">Pick One</div>
+        <div id="subtitle">Everyone put a finger on the screen</div>
+        <div id="status">Waiting...</div>
+    </div>
+    <div id="resetHint">Lift all fingers, then tap to reset</div>
+
+    <script>
+    //canvas stuff
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const statusEl = document.getElementById("status");
+
+    //make canvas fit window
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    //finger data
+    let touches = {};
+    let winnerId = null;
+    let decisionTimer = null;
+    let winnerSelectedAt = null;
+
+    //update status text
+    function updateStatus() {
+        const n = Object.keys(touches).length;
+        if (winnerId) {
+            statusEl.textContent = "Winner selected!";
+        } else if (n === 0) {
+            statusEl.textContent = "Tap to start a new round.";
+        } else if (n === 1) {
+            statusEl.textContent = "Waiting...";
+        } else {
+            statusEl.textContent = "Waiting...";
+        }
+    }
+
+    //handle touches
+    function handleTouches(e) {
+        const prevIds = new Set(Object.keys(touches));
+
+        touches = {};
+        for (let t of e.touches) {
+            touches[t.identifier] = {
+                x: t.clientX,
+                y: t.clientY
+            };
+        }
+
+        const ids = Object.keys(touches);
+        const count = ids.length;
+
+        let newFingerAdded = false;
+        for (const id of ids) {
+            if (!prevIds.has(id)) {
+                newFingerAdded = true;
+                break;
+            }
+        }
+
+        //timer for winner
+        if (!winnerId) {
+            if (count < 2) {
+                if (decisionTimer) {
+                    clearTimeout(decisionTimer);
+                    decisionTimer = null;
+                }
+            } else {
+                if (newFingerAdded || decisionTimer === null) {
+                    if (decisionTimer) clearTimeout(decisionTimer);
+                    decisionTimer = setTimeout(() => {
+                        if (!winnerId && Object.keys(touches).length >= 2) {
+                            pickWinner();
+                        }
+                        decisionTimer = null;
+                    }, 3000);
+                }
+            }
+        }
+
+        updateStatus();
+    }
+
+    //touch listeners
+    canvas.addEventListener("touchstart", handleTouches);
+    canvas.addEventListener("touchmove", handleTouches);
+    canvas.addEventListener("touchend", handleTouches);
+    canvas.addEventListener("touchcancel", handleTouches);
+
+    //reset if no fingers
+    canvas.addEventListener("click", () => {
+        if (Object.keys(touches).length === 0) {
+            winnerId = null;
+            winnerSelectedAt = null;
+            if (decisionTimer) clearTimeout(decisionTimer);
+            decisionTimer = null;
+            updateStatus();
+        }
+    });
+
+    //pick winner
+    function pickWinner() {
+        const ids = Object.keys(touches);
+        if (!ids.length) return;
+        winnerId = ids[Math.floor(Math.random() * ids.length)];
+        winnerSelectedAt = performance.now();
+        updateStatus();
+    }
+
+    //draw stuff
+    function draw(ts = 0) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#050510";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const ids = Object.keys(touches);
+
+        if (!winnerId) {
+            //draw fingers
+            const t = ts / 1000;
+            ids.forEach((id, i) => {
+                const { x, y } = touches[id];
+                const base = 45;
+                const r = base + Math.sin(t * 4 + i) * 6;
+
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = "rgba(255,255,255,0.85)";
+                ctx.stroke();
+            });
+        } else {
+            //draw winner and others
+            const now = ts;
+            const dt = (now - winnerSelectedAt) / 1000;
+
+            ids.forEach((id) => {
+                const { x, y } = touches[id];
+
+                if (id === winnerId) {
+                    const base = 60;
+                    const pulse = 1 + Math.sin(dt * 4) * 0.12;
+                    const r = base * pulse;
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.lineWidth = 7;
+                    ctx.strokeStyle = "rgba(255,255,255,0.98)";
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, r - 20, 0, Math.PI * 2);
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = "rgba(255,255,255,0.6)";
+                    ctx.stroke();
+
+                    ctx.font = "bold 20px system-ui";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "bottom";
+                    ctx.fillStyle = "rgba(255,255,255,0.95)";
+                    ctx.fillText("WINNER", x, y - r - 22);
+
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(x, y, 35, 0, Math.PI * 2);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+                    ctx.stroke();
+                }
+            });
+        }
+
+        requestAnimationFrame(draw);
+    }
+    requestAnimationFrame(draw);
+    </script>
+</body>
+</html>
