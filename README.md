@@ -1,6 +1,7 @@
 <h1 align="center">PickOne</h1>
 
 <img align="right" alt="PickOne Icon" width="250" src="apple-icon-180.png">
+https://pickonex.vercel.app/
 
 A tiny project where everyone puts a finger on the screen and the app randomly picks one person.  
 Super simple, nothing fancy. I originally used the **Chooser** app from the App Store, but it recently became paid, and I didn’t want to pay for it.  
